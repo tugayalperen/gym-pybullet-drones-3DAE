@@ -342,13 +342,6 @@ class FlockingUtils:
 
 class FlockingUtilsVec:
     def __init__(self, n_agents, center_x, center_y, center_z, spacing):
-        self.headings = None
-        self.positions = None
-        self.fa_vec = None
-        self.force_vecs = None
-        self.dist_ratio = None
-        self.dist_norm = None
-        self.forces = None
         self.n_agents = n_agents
         self.center_x = center_x
         self.center_y = center_y
@@ -386,7 +379,13 @@ class FlockingUtilsVec:
         self.mean_noise = 0.5
 
 
-
+        self.headings = None
+        self.positions = None
+        self.fa_vec = np.zeros((3, n_agents))
+        self.force_vecs = np.zeros((3, n_agents))
+        self.dist_ratio = None
+        self.dist_norm = None
+        self.forces = None
         self.u = np.zeros(n_agents)
         self.w = np.zeros(n_agents)
 
@@ -448,7 +447,7 @@ class FlockingUtilsVec:
         pos_h_yc = np.sin(phi) * np.sin(theta)
         pos_h_zc = np.cos(phi)
 
-        self.positions = np.stack((pos_xs, pos_ys, pos_zs))
+        self.positions = grid_positions.T
         self.headings = np.stack((pos_h_xc, pos_h_yc, pos_h_zc))
 
         return (self.positions, self.headings)
@@ -482,22 +481,22 @@ class FlockingUtilsVec:
         delta_z = positions[2] - positions[2][:, np.newaxis]
         dist = np.stack((delta_x, delta_y, delta_z))
         self.dist_norm = np.linalg.norm(dist, axis=0)
-        self.dist_norm[(dist_norm > sensing_range) | (dist_norm == 0)] = np.inf
-        self.dist_ratio = dist / dist_norm
+        self.dist_norm[(self.dist_norm > sensing_range) | (self.dist_norm == 0)] = np.inf
+        self.dist_ratio = dist / self.dist_norm
 
     def calc_p_forces(self):
-        self.forces = -epsilon * (2 * (self.sigmas4 / self.dist_norm ** 5) - (self.sigmas2 / self.dist_norm ** 3))
-        self.force_vecs = alpha * np.sum(self.forces * self.dist_ratio, axis=2)
+        self.forces = -self.epsilon * (2 * (self.sigmas4 / self.dist_norm ** 5) - (self.sigmas2 / self.dist_norm ** 3))
+        self.force_vecs = self.alpha * np.sum(self.forces * self.dist_ratio, axis=2)
 
     def calc_alignment_forces(self):
         av_heading = self.calculate_av_heading(self.headings)
         self.fa_vec = int(self.h_alignment) * self.beta * av_heading
 
     def calc_boun_rep(self, positions):
-        d_bounds = center_pos - np.abs(positions - self.center_pos)
-        in_bounds = d_bounds < boun_thresh
+        d_bounds = self.center_pos - np.abs(positions - self.center_pos)
+        in_bounds = d_bounds < self.boun_thresh
         if np.any(in_bounds):
-            boundary_effect = np.maximum(-epsilon * 5 * (2 * (self.sigmas_b4 / d_bounds ** 5) - (self.sigmas_b2 / d_bounds ** 3)), 0)
+            boundary_effect = np.maximum(-self.epsilon * 5 * (2 * (self.sigmas_b4 / d_bounds ** 5) - (self.sigmas_b2 / d_bounds ** 3)), 0)
 
             f_b =  boundary_effect * in_bounds * -np.sign(positions - self.center_pos)
             self.force_vecs += self.fa_vec + f_b
@@ -522,6 +521,7 @@ class FlockingUtilsVec:
 
     def get_headings(self):
         return self.headings
+
     def update_heading(self):
         self.headings = self.calculate_rotated_vector_batch(self.headings, self.force_vecs, self.w * self.dt)
 
